@@ -174,22 +174,13 @@ void setup_rec(String fname) {
 *****************************************************************************************
 */
 void deep_sleep() {
-    pinMode(PIN_LED, OUTPUT);
-    for (int i = 0; i < 5; i++) {
-        digitalWrite(PIN_LED, LOW);
-        delay(250);
-        digitalWrite(PIN_LED, HIGH);
-        delay(250);
-    }
-    pinMode(PIN_WAKE, INPUT_PULLDOWN);
+    uint64_t mask;
 
-    _spi_sd.end();
+    SD.end();
     digitalWrite(PIN_SD_PWR, LOW);
 
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_WAKE, 1);  // 1 = High, 0 = Low
-    // touchAttachInterrupt(T9, callback, 40);
-    // esp_sleep_enable_touchpad_wakeup();
-    // esp_sleep_enable_timer_wakeup(10000000);
+    mask = 1LL << 36;
+    esp_sleep_enable_ext1_wakeup(mask, ESP_EXT1_WAKEUP_ANY_HIGH);
     LOG("Going to sleep now !\n");
     Serial.flush();
     delay(500);
@@ -207,10 +198,10 @@ void setup() {
         _file_src[i] = new AudioFileSourceSD();
     }
 
-    pinMode(PIN_LED, OUTPUT);
-    digitalWrite(PIN_LED, LOW);
     pinMode(PIN_SD_PWR, OUTPUT);
     digitalWrite(PIN_SD_PWR, HIGH);
+    delay(50);
+    
     pinMode(PIN_SLEEP_TEST, INPUT_PULLUP);
 
     WiFi.mode(WIFI_OFF);
@@ -221,9 +212,7 @@ void setup() {
     LOG("chip:%s, revision:%d, flash:%d, heap:%d, psram:%d\n", ESP.getChipModel(), ESP.getChipRevision(),
         ESP.getFlashChipSize(), ESP.getFreeHeap(), ESP.getPsramSize());
 
-    // Print the wakeup reason for ESP32
     print_wakeup_reason();
-    print_wakeup_touchpad();
 
     // heap_caps_dump_all();
     // LOG("largest heap size : %d\n", heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
@@ -328,12 +317,9 @@ void loop() {
                         }
                     }
                 }
-
                 if (idle) {
-                    if (digitalRead(PIN_SLEEP_TEST) == LOW) {
-                        while (digitalRead(PIN_SLEEP_TEST) == LOW);
-                        deep_sleep();
-                    }
+                    _status = ST_IDLE;
+                    break;
                 }
             }
             break;
@@ -342,6 +328,13 @@ void loop() {
             bytes = _i2s_in->read(_rec_buf, _rec_buf_size);
             _wav_writer->write(_rec_buf, bytes / sizeof(int16_t));
             LOG(".");
+            break;
+
+        case ST_IDLE:
+            if (digitalRead(PIN_SLEEP_TEST) == LOW) {
+                while (digitalRead(PIN_SLEEP_TEST) == LOW);
+                deep_sleep();
+            }
             break;
     }
 }

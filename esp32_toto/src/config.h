@@ -42,16 +42,16 @@
 #define PIN_I2S_DOUT        26
 #define PIN_I2S_DIN         27
 
-#define PIN_LED             5
+// #define PIN_LED             5
 
 #define PIN_SD_PWR          17
-#define PIN_SD_CS           13
-#define PIN_SD_CLK          14
-#define PIN_SD_MOSI         15
-#define PIN_SD_MISO          2
+#define PIN_SD_CS           5
+#define PIN_SD_CLK          18
+#define PIN_SD_MOSI         23
+#define PIN_SD_MISO         19
 
 #define PIN_SLEEP_TEST       0
-#define PIN_WAKE            32
+#define PIN_WAKE            36
 
 /*
 *****************************************************************************************

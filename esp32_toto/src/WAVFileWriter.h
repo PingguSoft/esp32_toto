@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <SD.h>
 #include "WAVFile.h"
 
 class WAVFileWriter {
