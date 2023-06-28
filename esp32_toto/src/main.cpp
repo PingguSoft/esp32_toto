@@ -32,6 +32,16 @@ enum : int { ST_IDLE = 0,
 
 static const int kMAX_MIX = 3;
 
+static const uint8_t _tbl_touch_pins[] = {
+    PIN_TOUCH_1,
+    PIN_TOUCH_2,
+    PIN_TOUCH_3,
+    PIN_TOUCH_4,
+    PIN_TOUCH_5,
+    PIN_TOUCH_6,
+    PIN_TOUCH_7
+};
+
 /*
 *****************************************************************************************
 * VARIABLES
@@ -53,6 +63,11 @@ static WAVFileWriter *_wav_writer;
 static int _status = ST_IDLE;
 static File _dir;
 static float _gain = 1.0f;
+static uint32_t _dw_wake_btn = 0;
+static uint32_t _dw_old_btn = 0;
+static char *_file_list[20];
+static uint8_t _file_cnt = 0;
+
 
 /*
 *****************************************************************************************
@@ -84,6 +99,10 @@ void listDir(fs::FS &fs, const char *dirname, uint8_t levels) {
                 listDir(fs, file.name(), levels - 1);
             }
         } else {
+            if (_file_cnt < 20) {
+                _file_list[_file_cnt] = (char*)malloc(strlen(file.name() + 1));
+                strcpy(_file_list[_file_cnt++], file.name());
+            }
             LOG(" %-30s  %12lu", file.name(), file.size());
             time_t t = file.getLastWrite();
             struct tm *tmstruct = localtime(&t);
@@ -192,16 +211,44 @@ void deep_sleep() {
 *
 *****************************************************************************************
 */
+uint32_t check_wakeup_pin() {
+    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+    uint32_t key_mask = 0;
+
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_EXT1) {
+        uint64_t mask = esp_sleep_get_ext1_wakeup_status();
+
+        for (int i = 0; i < sizeof(_tbl_touch_pins); i++) {
+            if (mask & (1LL << _tbl_touch_pins[i]))
+                key_mask |= (1L << i);
+        }
+    }
+    return key_mask;
+}
+
+uint32_t check_pin() {
+    uint32_t key_mask = 0;
+
+    for (int i = 0; i < sizeof(_tbl_touch_pins); i++) {
+        if (digitalRead(_tbl_touch_pins[i]) == HIGH)
+            key_mask |= (1L << i);
+    }
+    return key_mask;
+}
+
 void setup() {
     for (int i = 0; i < kMAX_MIX; i++) {
         _gen[i] = new AudioGeneratorWAV();
         _file_src[i] = new AudioFileSourceSD();
     }
 
+    for (int i = 0; i < sizeof(_tbl_touch_pins); i++) {
+        pinMode(_tbl_touch_pins[i], INPUT);
+    }
     pinMode(PIN_SD_PWR, OUTPUT);
     digitalWrite(PIN_SD_PWR, HIGH);
     delay(50);
-    
+
     pinMode(PIN_SLEEP_TEST, INPUT_PULLUP);
 
     WiFi.mode(WIFI_OFF);
@@ -212,7 +259,9 @@ void setup() {
     LOG("chip:%s, revision:%d, flash:%d, heap:%d, psram:%d\n", ESP.getChipModel(), ESP.getChipRevision(),
         ESP.getFlashChipSize(), ESP.getFreeHeap(), ESP.getPsramSize());
 
-    print_wakeup_reason();
+    // print_wakeup_reason();
+    _dw_wake_btn = check_wakeup_pin();
+    LOG("wake up pin:%d\n", _dw_wake_btn);
 
     // heap_caps_dump_all();
     // LOG("largest heap size : %d\n", heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
@@ -237,10 +286,40 @@ void setup() {
     // deep_sleep(true);
 }
 
+char *get_file_with_number(int number) {
+    char buf[5];
+
+    sprintf(buf, "%02d_", number);
+    for (int i = 0; i < 20; i++) {
+        if (_file_list[i] != NULL && String(_file_list[i]).startsWith(buf))
+            return _file_list[i];
+    }
+    return NULL;
+}
+
 void loop() {
     int key;
     int16_t bytes;
     bool ret;
+
+    uint32_t btn = (_dw_wake_btn > 0) ? _dw_wake_btn : check_pin();
+    if (btn > 0) {
+        uint32_t chg = btn ^ _dw_old_btn;
+
+        if (chg > 0) {
+            for (int i = 0; i < sizeof(_tbl_touch_pins); i++) {
+                if ((chg & BV(i)) && (btn & BV(i))) {
+                    char *fname = get_file_with_number(i);
+                    LOG("key touched : %2d %s\n", i, fname);
+                    if (fname != NULL && setup_play("/words/" + String(fname)))
+                        _status = ST_PLAYING;
+                }
+            }
+        }
+        if (_dw_wake_btn > 0)
+            _dw_wake_btn = 0;
+    }
+    _dw_old_btn = btn;
 
     key = Serial.available() ? Serial.read() : -1;
 

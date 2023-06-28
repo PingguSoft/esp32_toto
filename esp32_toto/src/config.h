@@ -51,7 +51,14 @@
 #define PIN_SD_MISO         19
 
 #define PIN_SLEEP_TEST       0
-#define PIN_WAKE            36
+#define PIN_REC_SW           4
+#define PIN_TOUCH_1         36
+#define PIN_TOUCH_2         39
+#define PIN_TOUCH_3         32
+#define PIN_TOUCH_4         34
+#define PIN_TOUCH_5         14
+#define PIN_TOUCH_6         12
+#define PIN_TOUCH_7         13
 
 /*
 *****************************************************************************************
